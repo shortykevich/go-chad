@@ -10,26 +10,32 @@ func createNewClient(conn *websocket.Conn) *Client {
 	return &Client{conn: conn}
 }
 
-func (c *Client) ReadFromConns() {
+func (c *Client) getConn() *websocket.Conn {
+	return c.conn
+}
+
+func (c *Client) readFromClient() {
 	for {
-		_, msg, err := c.conn.ReadMessage()
+		msgType, msg, err := c.conn.ReadMessage()
 		if err != nil {
 			logger.Error(err.Error())
 			break
 		}
-		c.SendMsgToConns(msg)
+		c.sendMsgToClients(msgType, msg)
 	}
 }
 
-func (c *Client) SendMsgToConns(msg []byte) {
-	for k := range connections.mp {
+// TODO: find a better way broadcasting to users
+// cause control flow instance should be moved into main func
+func (c *Client) sendMsgToClients(msgType int, msg []byte) {
+	for k := range flowCont.clients.mp {
 		if k == c.conn {
 			continue
 		}
-		go func(c *websocket.Conn) {
-			if err := c.WriteMessage(websocket.TextMessage, msg); err != nil {
-				logger.Error(err.Error())
-			}
-		}(k)
+		// go func(c *websocket.Conn) {
+		if err := k.WriteMessage(msgType, msg); err != nil {
+			logger.Error(err.Error())
+		}
+		// }(k)
 	}
 }

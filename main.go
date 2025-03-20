@@ -12,13 +12,17 @@ import (
 )
 
 var (
-	connections = &ConcSafeConns{
-		mp: make(map[*websocket.Conn]bool),
-	}
 	upgrader = websocket.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
 		CheckOrigin:     func(r *http.Request) bool { return true },
+	}
+
+	// TODO: Move to main func
+	flowCont = &FlowController{
+		addClient: make(chan *Client),
+		delClient: make(chan *Client),
+		clients:   &MutClients{mp: make(map[*websocket.Conn]bool)},
 	}
 
 	logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
@@ -31,7 +35,11 @@ func main() {
 	flag.Parse()
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/", wsHandler)
+	go flowCont.connControlFlow()
+
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		wsHandler(flowCont, w, r)
+	})
 
 	url := fmt.Sprintf("%v:%v", *host, *port)
 	logger.Info(fmt.Sprintf("Server running on: '%s'", url))
@@ -41,19 +49,21 @@ func main() {
 	}
 }
 
-func wsHandler(w http.ResponseWriter, r *http.Request) {
+func wsHandler(fc *FlowController, w http.ResponseWriter, r *http.Request) {
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		logger.Error(err.Error())
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	defer func() {
-		connections.DeleteConn(ws)
-		ws.Close()
-	}()
-	connections.AddConn(ws)
 	client := createNewClient(ws)
 
-	client.ReadFromConns()
+	defer func() {
+		fc.delClient <- client
+		ws.Close()
+	}()
+
+	fc.addClient <- client
+
+	client.readFromClient()
 }
