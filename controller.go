@@ -1,22 +1,23 @@
 package main
 
+import "fmt"
+
 type FlowController struct {
 	addClient chan *Client
 	delClient chan *Client
 	clients   *MutClients
-	broadcast chan []byte
 }
 
 func (fc *FlowController) initFlowController() {
 	for {
 		select {
 		case cl := <-fc.addClient:
-			fc.clients.addConn(cl.getConn())
-			logger.Info("Added new connection!")
+			fc.clients.addConn(cl)
+			logger.Info(fmt.Sprintf("Added '%s' to list of clients", cl.name))
 		case cl := <-fc.delClient:
-			if fc.clients.contains(cl.getConn()) {
-				fc.clients.deleteConn(cl.getConn())
-				logger.Info("Deleted connection!")
+			if fc.clients.contains(cl) {
+				fc.clients.deleteConn(cl)
+				logger.Info(fmt.Sprintf("Deleted '%s' from list of clients", cl.name))
 			}
 		}
 	}

@@ -30,8 +30,7 @@ func main() {
 	flowController := &FlowController{
 		addClient: make(chan *Client),
 		delClient: make(chan *Client),
-		clients:   &MutClients{mp: make(map[*websocket.Conn]bool)},
-		broadcast: make(chan []byte),
+		clients:   &MutClients{mp: make(map[*Client]string)},
 	}
 
 	go flowController.initFlowController()
@@ -51,14 +50,15 @@ func main() {
 func wsHandler(fc *FlowController, w http.ResponseWriter, r *http.Request) {
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		logger.Error(err.Error())
+		logger.Error(fmt.Sprintf("Error occured during upgrading HTTP to Websocket connection: '%s'", err))
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	client := createNewClient(ws)
+	client := createNewClient(ws, r.RemoteAddr)
+
 	defer func() {
 		fc.delClient <- client
-		ws.Close()
+		client.closeConn()
 	}()
 	fc.addClient <- client
 
