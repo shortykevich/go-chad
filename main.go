@@ -18,13 +18,6 @@ var (
 		CheckOrigin:     func(r *http.Request) bool { return true },
 	}
 
-	// TODO: Move to main func
-	flowCont = &FlowController{
-		addClient: make(chan *Client),
-		delClient: make(chan *Client),
-		clients:   &MutClients{mp: make(map[*websocket.Conn]bool)},
-	}
-
 	logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
 
 	host = flag.String("host", "127.0.0.1", "Host name")
@@ -34,11 +27,17 @@ var (
 func main() {
 	flag.Parse()
 	mux := http.NewServeMux()
+	flowController := &FlowController{
+		addClient: make(chan *Client),
+		delClient: make(chan *Client),
+		clients:   &MutClients{mp: make(map[*websocket.Conn]bool)},
+		broadcast: make(chan []byte),
+	}
 
-	go flowCont.connControlFlow()
+	go flowController.initFlowController()
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		wsHandler(flowCont, w, r)
+		wsHandler(flowController, w, r)
 	})
 
 	url := fmt.Sprintf("%v:%v", *host, *port)
@@ -57,13 +56,11 @@ func wsHandler(fc *FlowController, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	client := createNewClient(ws)
-
 	defer func() {
 		fc.delClient <- client
 		ws.Close()
 	}()
-
 	fc.addClient <- client
 
-	client.readFromClient()
+	client.readFromClient(fc)
 }
