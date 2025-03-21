@@ -14,17 +14,17 @@ import (
 func runServer() {
 	flag.Parse()
 	mux := http.NewServeMux()
-	flowController := &FlowController{
+	clientsController := &clientsController{
 		addClient: make(chan *Client),
 		delClient: make(chan *Client),
-		clients:   &MutClients{mp: make(map[*Client]string)},
+		clients:   make(map[*Client]string),
 		broadcast: make(chan *toSendMessage),
 	}
 
-	go flowController.initFlowController()
+	go clientsController.initFlowController()
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		wsHandler(flowController, w, r)
+		wsHandler(clientsController, w, r)
 	})
 
 	url := fmt.Sprintf("%v:%v", *host, *port)

@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -19,15 +18,10 @@ const (
 )
 
 type Client struct {
-	fc     *FlowController
+	fc     *clientsController
 	conn   *websocket.Conn
 	name   string
 	toSend chan toSendMessage
-}
-
-type MutClients struct {
-	mu sync.Mutex
-	mp map[*Client]string
 }
 
 type toSendMessage struct {
@@ -35,32 +29,7 @@ type toSendMessage struct {
 	msgType int
 }
 
-func (mc *MutClients) addConn(client *Client) {
-	mc.mu.Lock()
-	defer mc.mu.Unlock()
-	mc.mp[client] = client.name
-}
-
-func (mc *MutClients) deleteConn(client *Client) {
-	mc.mu.Lock()
-	defer mc.mu.Unlock()
-	delete(mc.mp, client)
-}
-
-func (mc *MutClients) contains(client *Client) bool {
-	mc.mu.Lock()
-	defer mc.mu.Unlock()
-	_, ok := mc.mp[client]
-	return ok
-}
-
-func (mc *MutClients) getMap() *map[*Client]string {
-	mc.mu.Lock()
-	defer mc.mu.Unlock()
-	return &mc.mp
-}
-
-func createNewClient(fc *FlowController, conn *websocket.Conn, name string) *Client {
+func createNewClient(fc *clientsController, conn *websocket.Conn, name string) *Client {
 	return &Client{
 		fc:     fc,
 		conn:   conn,

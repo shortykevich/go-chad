@@ -2,26 +2,43 @@ package main
 
 import "fmt"
 
-type FlowController struct {
+type clientsController struct {
 	addClient chan *Client
 	delClient chan *Client
-	clients   *MutClients
+	clients   map[*Client]string
 	broadcast chan *toSendMessage
 }
 
-func (fc *FlowController) initFlowController() {
+func (cc *clientsController) addConn(client *Client) {
+	cc.clients[client] = client.name
+}
+
+func (cc *clientsController) deleteConn(client *Client) {
+	delete(cc.clients, client)
+}
+
+func (cc *clientsController) contains(client *Client) bool {
+	_, ok := cc.clients[client]
+	return ok
+}
+
+func (cc *clientsController) getMap() *map[*Client]string {
+	return &cc.clients
+}
+
+func (cc *clientsController) initFlowController() {
 	for {
 		select {
-		case cl := <-fc.addClient:
-			fc.clients.addConn(cl)
+		case cl := <-cc.addClient:
+			cc.addConn(cl)
 			logger.Info(fmt.Sprintf("Added '%s' to list of clients", cl.name))
-		case cl := <-fc.delClient:
-			if fc.clients.contains(cl) {
-				fc.clients.deleteConn(cl)
+		case cl := <-cc.delClient:
+			if cc.contains(cl) {
+				cc.deleteConn(cl)
 				logger.Info(fmt.Sprintf("Deleted '%s' from list of clients", cl.name))
 			}
-		case msg := <-fc.broadcast:
-			for cl := range *fc.clients.getMap() {
+		case msg := <-cc.broadcast:
+			for cl := range *cc.getMap() {
 				cl.toSend <- *msg
 			}
 		}

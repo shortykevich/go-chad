@@ -28,7 +28,7 @@ var (
 	}
 )
 
-func wsHandler(fc *FlowController, w http.ResponseWriter, r *http.Request) {
+func wsHandler(fc *clientsController, w http.ResponseWriter, r *http.Request) {
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		logger.Error("Error occured during upgrading HTTP to Websocket connection:", "error", err)
