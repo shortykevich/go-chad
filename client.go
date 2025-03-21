@@ -3,19 +3,31 @@ package main
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
 
+const (
+	// In cases where a lot of clients send messages
+	toSendBuffer = 100
+)
+
 type Client struct {
-	fc   *FlowController
-	conn *websocket.Conn
-	name string
+	fc     *FlowController
+	conn   *websocket.Conn
+	name   string
+	toSend chan toSendMessage
 }
 
 type MutClients struct {
 	mu sync.Mutex
 	mp map[*Client]string
+}
+
+type toSendMessage struct {
+	data    []byte
+	msgType int
 }
 
 func (mc *MutClients) addConn(client *Client) {
@@ -45,9 +57,10 @@ func (mc *MutClients) getMap() *map[*Client]string {
 
 func createNewClient(fc *FlowController, conn *websocket.Conn, name string) *Client {
 	return &Client{
-		fc:   fc,
-		conn: conn,
-		name: name,
+		fc:     fc,
+		conn:   conn,
+		name:   name,
+		toSend: make(chan toSendMessage, toSendBuffer),
 	}
 }
 
@@ -70,6 +83,11 @@ func processDiscError(c *Client, err error) {
 }
 
 func (c *Client) readFromClient() {
+	defer func() {
+		c.fc.delClient <- c
+		c.closeConn()
+	}()
+
 	for {
 		msgType, msg, err := c.getConn().ReadMessage()
 		if err != nil {
@@ -77,17 +95,42 @@ func (c *Client) readFromClient() {
 			break
 		}
 		logger.Info(fmt.Sprintf("client: '%s' wrote message: '%s'", c.name, string(msg)))
-		c.sendMsgToClients(msgType, msg)
+		c.fc.broadcast <- &toSendMessage{
+			data:    msg,
+			msgType: msgType,
+		}
 	}
 }
 
-func (c *Client) sendMsgToClients(msgType int, msg []byte) {
-	for cl := range *c.fc.clients.getMap() {
-		if cl == c {
-			continue
-		}
-		if err := cl.getConn().WriteMessage(msgType, msg); err != nil {
-			logger.Error(err.Error())
+func (c *Client) sendMsgToClient() {
+
+	pinger := time.NewTicker(pingPeriod)
+	defer func() {
+		pinger.Stop()
+		c.getConn().Close()
+	}()
+
+	for {
+		select {
+		case msg, ok := <-c.toSend:
+			if !ok {
+				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				return
+			}
+			c.getConn().WriteMessage(msg.msgType, msg.data)
+			for {
+				select {
+				case msg := <-c.toSend:
+					c.getConn().WriteMessage(msg.msgType, msg.data)
+				default:
+					break
+				}
+			}
+		case <-pinger.C:
+			c.getConn().SetWriteDeadline(time.Now().Add(writeWait))
+			if err := c.getConn().WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
+			}
 		}
 	}
 }

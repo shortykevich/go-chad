@@ -6,6 +6,7 @@ type FlowController struct {
 	addClient chan *Client
 	delClient chan *Client
 	clients   *MutClients
+	broadcast chan *toSendMessage
 }
 
 func (fc *FlowController) initFlowController() {
@@ -18,6 +19,10 @@ func (fc *FlowController) initFlowController() {
 			if fc.clients.contains(cl) {
 				fc.clients.deleteConn(cl)
 				logger.Info(fmt.Sprintf("Deleted '%s' from list of clients", cl.name))
+			}
+		case msg := <-fc.broadcast:
+			for cl := range *fc.clients.getMap() {
+				cl.toSend <- *msg
 			}
 		}
 	}

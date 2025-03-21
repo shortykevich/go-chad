@@ -12,12 +12,11 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// TODO: limit message size to read,
-// implement ping-pong sequence to verify client connection
 const (
-	maxMessageSize = 256
-	pingPeriod     = 90 * time.Second
-	pongWait       = 100 * time.Second
+	messageSize = 256
+	pingPeriod  = 90 * time.Second
+	pongWait    = 100 * time.Second
+	writeWait   = 20 * time.Second
 )
 
 var (
@@ -39,6 +38,7 @@ func main() {
 		addClient: make(chan *Client),
 		delClient: make(chan *Client),
 		clients:   &MutClients{mp: make(map[*Client]string)},
+		broadcast: make(chan *toSendMessage),
 	}
 
 	go flowController.initFlowController()
@@ -62,13 +62,16 @@ func wsHandler(fc *FlowController, w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	client := createNewClient(fc, ws, r.RemoteAddr)
+	ws.SetReadLimit(messageSize)
+	ws.SetReadDeadline(time.Now().Add(pongWait))
+	ws.SetPongHandler(func(appData string) error {
+		ws.SetReadDeadline(time.Now().Add(pongWait))
+		return nil
+	})
 
-	defer func() {
-		fc.delClient <- client
-		client.closeConn()
-	}()
+	client := createNewClient(fc, ws, r.RemoteAddr)
 	fc.addClient <- client
 
-	client.readFromClient()
+	go client.readFromClient()
+	go client.sendMsgToClient()
 }
