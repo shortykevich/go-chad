@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"time"
 
@@ -25,6 +26,7 @@ type Client struct {
 }
 
 type toSendMessage struct {
+	client  *Client
 	data    []byte
 	msgType int
 }
@@ -68,8 +70,12 @@ func (c *Client) readFromClient() {
 			processDiscError(c, err)
 			break
 		}
+		msg = bytes.TrimSpace(msg)
 		logger.Info(fmt.Sprintf("client: '%s' wrote message: '%s'", c.name, string(msg)))
+		user := fmt.Append([]byte(c.name), ": ")
+		msg = append(user, msg...)
 		c.fc.broadcast <- &toSendMessage{
+			client:  c,
 			data:    msg,
 			msgType: msgType,
 		}

@@ -1,6 +1,8 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type clientsController struct {
 	addClient chan *Client
@@ -39,6 +41,9 @@ func (cc *clientsController) initFlowController() {
 			}
 		case msg := <-cc.broadcast:
 			for cl := range *cc.getMap() {
+				if msg.client == cl {
+					continue
+				}
 				cl.toSend <- *msg
 			}
 		}
