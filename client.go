@@ -8,6 +8,7 @@ import (
 )
 
 type Client struct {
+	fc   *FlowController
 	conn *websocket.Conn
 	name string
 }
@@ -42,8 +43,9 @@ func (mc *MutClients) getMap() *map[*Client]string {
 	return &mc.mp
 }
 
-func createNewClient(conn *websocket.Conn, name string) *Client {
+func createNewClient(fc *FlowController, conn *websocket.Conn, name string) *Client {
 	return &Client{
+		fc:   fc,
 		conn: conn,
 		name: name,
 	}
@@ -67,7 +69,7 @@ func processDiscError(c *Client, err error) {
 	}
 }
 
-func (c *Client) readFromClient(fc *FlowController) {
+func (c *Client) readFromClient() {
 	for {
 		msgType, msg, err := c.getConn().ReadMessage()
 		if err != nil {
@@ -75,12 +77,12 @@ func (c *Client) readFromClient(fc *FlowController) {
 			break
 		}
 		logger.Info(fmt.Sprintf("client: '%s' wrote message: '%s'", c.name, string(msg)))
-		c.sendMsgToClients(fc, msgType, msg)
+		c.sendMsgToClients(msgType, msg)
 	}
 }
 
-func (c *Client) sendMsgToClients(fc *FlowController, msgType int, msg []byte) {
-	for cl := range *fc.clients.getMap() {
+func (c *Client) sendMsgToClients(msgType int, msg []byte) {
+	for cl := range *c.fc.clients.getMap() {
 		if cl == c {
 			continue
 		}

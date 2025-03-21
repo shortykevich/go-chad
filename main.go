@@ -7,21 +7,29 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
 
+// TODO: limit message size to read,
+// implement ping-pong sequence to verify client connection
+const (
+	maxMessageSize = 256
+	pingPeriod     = 90 * time.Second
+	pongWait       = 100 * time.Second
+)
+
 var (
+	logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
+	host   = flag.String("host", "127.0.0.1", "Host name")
+	port   = flag.String("port", "8554", "Port")
+
 	upgrader = websocket.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
 		CheckOrigin:     func(r *http.Request) bool { return true },
 	}
-
-	logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
-
-	host = flag.String("host", "127.0.0.1", "Host name")
-	port = flag.String("port", "8554", "Port")
 )
 
 func main() {
@@ -54,7 +62,7 @@ func wsHandler(fc *FlowController, w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	client := createNewClient(ws, r.RemoteAddr)
+	client := createNewClient(fc, ws, r.RemoteAddr)
 
 	defer func() {
 		fc.delClient <- client
@@ -62,5 +70,5 @@ func wsHandler(fc *FlowController, w http.ResponseWriter, r *http.Request) {
 	}()
 	fc.addClient <- client
 
-	client.readFromClient(fc)
+	client.readFromClient()
 }
