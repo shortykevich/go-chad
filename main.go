@@ -2,8 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
-	"log"
 	"log/slog"
 	"net/http"
 	"os"
@@ -13,52 +11,27 @@ import (
 )
 
 const (
-	messageSize = 256
-	pingPeriod  = 90 * time.Second
-	pongWait    = 100 * time.Second
-	writeWait   = 20 * time.Second
+	server = "server"
+	client = "client"
 )
 
 var (
 	logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
+	mode   = flag.String("mode", server, "'server' to run server\n'client' to run client")
 	host   = flag.String("host", "127.0.0.1", "Host name")
 	port   = flag.String("port", "8554", "Port")
 
 	upgrader = websocket.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
-		CheckOrigin:     func(r *http.Request) bool { return true },
+		CheckOrigin:     func(r *http.Request) bool { return true }, // Probably it would be a really bad idea for production usage
 	}
 )
-
-func main() {
-	flag.Parse()
-	mux := http.NewServeMux()
-	flowController := &FlowController{
-		addClient: make(chan *Client),
-		delClient: make(chan *Client),
-		clients:   &MutClients{mp: make(map[*Client]string)},
-		broadcast: make(chan *toSendMessage),
-	}
-
-	go flowController.initFlowController()
-
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		wsHandler(flowController, w, r)
-	})
-
-	url := fmt.Sprintf("%v:%v", *host, *port)
-	logger.Info(fmt.Sprintf("Server running on: '%s'", url))
-	err := http.ListenAndServe(url, mux)
-	if err != nil {
-		log.Fatal(err)
-	}
-}
 
 func wsHandler(fc *FlowController, w http.ResponseWriter, r *http.Request) {
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		logger.Error(fmt.Sprintf("Error occured during upgrading HTTP to Websocket connection: '%s'", err))
+		logger.Error("Error occured during upgrading HTTP to Websocket connection:", "error", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -74,4 +47,14 @@ func wsHandler(fc *FlowController, w http.ResponseWriter, r *http.Request) {
 
 	go client.readFromClient()
 	go client.sendMsgToClient()
+}
+
+func main() {
+	flag.Parse()
+	switch *mode {
+	case server:
+		runServer()
+	case client:
+		runClient()
+	}
 }

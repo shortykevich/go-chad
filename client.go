@@ -11,6 +11,11 @@ import (
 const (
 	// In cases where a lot of clients send messages
 	toSendBuffer = 100
+
+	messageSize = 256
+	pingPeriod  = 90 * time.Second
+	pongWait    = 100 * time.Second
+	writeWait   = 20 * time.Second
 )
 
 type Client struct {
