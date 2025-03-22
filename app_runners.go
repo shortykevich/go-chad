@@ -21,7 +21,7 @@ func runServer() {
 		broadcast: make(chan *toSendMessage),
 	}
 
-	go clientsController.initFlowController()
+	go clientsController.initClientsController()
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		wsHandler(clientsController, w, r)

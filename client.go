@@ -83,7 +83,6 @@ func (c *Client) readFromClient() {
 }
 
 func (c *Client) sendMsgToClient() {
-
 	pinger := time.NewTicker(pingPeriod)
 	defer func() {
 		pinger.Stop()
@@ -108,7 +107,7 @@ func (c *Client) sendMsgToClient() {
 			}
 		case <-pinger.C:
 			c.getConn().SetWriteDeadline(time.Now().Add(writeWait))
-			if err := c.getConn().WriteMessage(websocket.PingMessage, nil); err != nil {
+			if err := c.getConn().WriteMessage(websocket.PingMessage, []byte{}); err != nil {
 				return
 			}
 		}
